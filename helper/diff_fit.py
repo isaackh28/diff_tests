@@ -429,7 +429,8 @@ def diff_global(c_xt, x, time,
                    c_s = None,
                    fit_indices = None,
                    d_init = 1e-4,
-                   min_points = 3):
+                   min_points = 3,
+                ):
     T, _ = c_xt.shape
     cs_global = np.nan
     d_global = np.nan
@@ -572,7 +573,8 @@ def diff_csfixed(c_xt, x, time,
                    cs_fixed, # scalar (global) or array of length T (per-timepoint)
                    fit_indices = None,
                    d_init = 1e-4,
-                   min_points = 3):
+                   min_points = 3,
+                   print_res = True): # print results
     T, _ = c_xt.shape
     d_global = np.nan
     d_per_t = np.full(T, np.nan)
@@ -661,16 +663,19 @@ def diff_csfixed(c_xt, x, time,
 
         r2_global = np.nanmean(r2_per_t[list(valid_indices)])
 
-        # --- Reporting ---
-        print(f"\nGlobal D fit complete.")
-        print(f"D = {d_global:.3e}, SE = {se_d_global:.3e} "
-              f"(95%CI [{lb_d_global:.3e}, {ub_d_global:.3e}]")
-        print(f"Mean per-timepoint R2 = {r2_global:.4f}")
+        if print_res:
+            # --- Reporting ---
+            print(f"\nGlobal D fit complete.")
+            print(f"D = {d_global:.3e}, SE = {se_d_global:.3e} "
+                f"(95%CI [{lb_d_global:.3e}, {ub_d_global:.3e}]")
+            print(f"Mean per-timepoint R2 = {r2_global:.4f}")
+
     except Exception as e:
         print(f"Global D fit FAILED -> {type(e)}: {e}")
 
     # ---- Per-timepoint D fit ----
-    print(f"\nPer-timepoint D fit:")
+    if print_res:
+        print(f"\nPer-timepoint D fit:")
     for i, x_seg, c_seg, t_i, cs_t in zip(
         valid_indices, x_segments, c_segments, valid_times, cs_segments
     ):
@@ -700,15 +705,17 @@ def diff_csfixed(c_xt, x, time,
             ss_res = np.sum((c_seg - c_pred) ** 2)
             ss_tot = np.sum((c_seg - np.mean(c_seg)) ** 2)
 
-            print(f"t = {t_i} s: Cs = {cs_t:.3f}, D = {D_fit:.3e}, "
+            if print_res:
+                print(f"t = {t_i} s: Cs = {cs_t:.3f}, D = {D_fit:.3e}, "
                   f"SE = {se_d:.3e} "
-            f"(95% CI[{lb_d_per_t[i]:.3e}, {ub_d_per_t[i]:.3e}]), "
-            f"R2 = {1 - ss_res/ss_tot:.4f}")
+                f"(95% CI[{lb_d_per_t[i]:.3e}, {ub_d_per_t[i]:.3e}]), "
+                f"R2 = {1 - ss_res/ss_tot:.4f}")
 
         except Exception as e:
             print(f"t = {t_i}: Fit FAILED -> {type(e)}: {e}")
-
-    print(f"\nNote: SE and CI are symmetric (curve_fit linear approximation)")
+    
+    if print_res:
+        print(f"\nNote: SE and CI are symmetric (curve_fit linear approximation)")
 
     return{
         "d_global": d_global,
