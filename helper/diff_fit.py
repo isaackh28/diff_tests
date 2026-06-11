@@ -1,7 +1,9 @@
 import scipy
 from scipy.optimize import curve_fit
 import numpy as np
-from helper.diff_utils import diff_profile
+from helper.diff_utils import diff_profile, diff_profile_inf
+
+fit_model = diff_profile_inf
 
 # --------
 # Per-Timepoint D, Per-Timepoint Cs
@@ -50,7 +52,7 @@ def diff_free(c_xt, x, time,
         upper = [np.inf, np.inf]
 
         def model(x_seg, D, Cs):
-            return diff_profile(x_seg, D, Cs, t_i)
+            return fit_model(x_seg, D, Cs, t_i)
         
         try:
             popt, pcov = curve_fit(
@@ -89,7 +91,7 @@ def diff_free(c_xt, x, time,
                 corr_per_t[i] = pcov / np.outer(stdevs, stdevs)
 
             # R2
-            c_pred = diff_profile(x_fit, D_fit, Cs_fit, t_i)
+            c_pred = fit_model(x_fit, D_fit, Cs_fit, t_i)
             ss_res = np.sum((c_fit - c_pred) ** 2)
             ss_tot = np.sum((c_fit - np.mean(c_fit)) ** 2)
             r2_per_t[i] = 1 - (ss_res / ss_tot)
@@ -174,7 +176,7 @@ def diff_dglobal(c_xt, x, time,
     def global_model(x_all, D, *Cs_per_t):
         predicted = []
         for x_seg, t_pred, Cs in zip(x_segments, valid_times, Cs_per_t):
-            predicted.append(diff_profile(x_seg, D, Cs, t_pred))
+            predicted.append(fit_model(x_seg, D, Cs, t_pred))
         return np.concatenate(predicted)
 
     try:
@@ -220,7 +222,7 @@ def diff_dglobal(c_xt, x, time,
             zip(valid_indices, x_segments, c_segments, cs_values, valid_times)
         ):
             cs_per_t[idx] = cs
-            c_pred = diff_profile(x_seg, d_global, cs, t_fit)
+            c_pred = fit_model(x_seg, d_global, cs, t_fit)
             ss_res = np.sum((c_seg - c_pred) ** 2)
             ss_tot = np.sum((c_seg - np.mean(c_seg)) ** 2)
             r2_per_t[idx] = 1 - (ss_res / ss_tot)
@@ -327,7 +329,7 @@ def diff_csglobal(c_xt, x, time,
     def global_model(x_all, Cs, *D_per_t):
         predicted = []
         for x_seg, t_pred, D in zip(x_segments, valid_times, D_per_t):
-            predicted.append(diff_profile(x_seg, D, Cs, t_pred))
+            predicted.append(fit_model(x_seg, D, Cs, t_pred))
         return np.concatenate(predicted)
 
     try:
@@ -373,7 +375,7 @@ def diff_csglobal(c_xt, x, time,
             zip(valid_indices, x_segments, c_segments, d_values, valid_times)
         ):
             d_per_t[idx] = d
-            c_pred = diff_profile(x_seg, d, cs_global, t_fit)
+            c_pred = fit_model(x_seg, d, cs_global, t_fit)
             ss_res = np.sum((c_seg - c_pred) ** 2)
             ss_tot = np.sum((c_seg - np.mean(c_seg)) ** 2)
             r2_per_t[idx] = 1 - (ss_res / ss_tot)
@@ -479,7 +481,7 @@ def diff_global(c_xt, x, time,
     def global_model(x_all, Cs, D):
         predicted = []
         for x_seg, t_pred in zip(x_segments, valid_times):
-            predicted.append(diff_profile(x_seg, D, Cs, t_pred))
+            predicted.append(fit_model(x_seg, D, Cs, t_pred))
         return np.concatenate(predicted)
 
     try:
@@ -523,7 +525,7 @@ def diff_global(c_xt, x, time,
         for param_idx, (idx, x_seg, c_seg, t_fit) in enumerate(
             zip(valid_indices, x_segments, c_segments, valid_times)
         ):
-            c_pred = diff_profile(x_seg, d_global, cs_global, t_fit)
+            c_pred = fit_model(x_seg, d_global, cs_global, t_fit)
             ss_res = np.sum((c_seg - c_pred) ** 2)
             ss_tot = np.sum((c_seg - np.mean(c_seg)) ** 2)
             r2_per_t[idx] = 1 - (ss_res / ss_tot)
@@ -632,7 +634,7 @@ def diff_csfixed(c_xt, x, time,
     def global_model(x_all, D):
         predicted = []
         for x_seg, t_pred, cs_t in zip(x_segments, valid_times, cs_segments):
-            predicted.append(diff_profile(x_seg, D, cs_t, t_pred))
+            predicted.append(fit_model(x_seg, D, cs_t, t_pred))
         return np.concatenate(predicted)
 
     try:
@@ -656,7 +658,7 @@ def diff_csfixed(c_xt, x, time,
         for idx, x_seg, c_seg, t_fit, cs_t, in zip(
             valid_indices, x_segments, c_segments, valid_times, cs_segments
         ):
-            c_pred = diff_profile(x_seg, d_global, cs_t, t_fit)
+            c_pred = fit_model(x_seg, d_global, cs_t, t_fit)
             ss_res = np.sum((c_seg - c_pred) ** 2)
             ss_tot = np.sum((c_seg - np.mean(c_seg)) ** 2)
             r2_per_t[idx] = 1 - (ss_res / ss_tot)
@@ -680,7 +682,7 @@ def diff_csfixed(c_xt, x, time,
         valid_indices, x_segments, c_segments, valid_times, cs_segments
     ):
         def model(x_seg, D, cs_t = cs_t): # capture cs_t in default arg
-            return diff_profile(x_seg, D, cs_t, t_i)
+            return fit_model(x_seg, D, cs_t, t_i)
 
         try:
             popt_t, pcov_t = curve_fit(
@@ -701,7 +703,7 @@ def diff_csfixed(c_xt, x, time,
             lb_d_per_t[i] = D_fit - ci_t
             ub_d_per_t[i] = D_fit + ci_t
 
-            c_pred = diff_profile(x_seg, D_fit, cs_t, t_i)
+            c_pred = fit_model(x_seg, D_fit, cs_t, t_i)
             ss_res = np.sum((c_seg - c_pred) ** 2)
             ss_tot = np.sum((c_seg - np.mean(c_seg)) ** 2)
 
