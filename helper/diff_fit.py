@@ -3,7 +3,7 @@ from scipy.optimize import curve_fit
 import numpy as np
 from helper.diff_utils import diff_profile, diff_profile_inf
 
-fit_model = diff_profile_inf
+fit_model = diff_profile
 
 # --------
 # Per-Timepoint D, Per-Timepoint Cs
@@ -438,7 +438,7 @@ def diff_global(c_xt, x, time,
     d_global = np.nan
     r2_per_t = np.full(T, np.nan)
     se_d = np.nan
-    se_cs_per_t = np.full(T, np.nan)
+    se_cs = np.nan
     pcov_out = None
     corr_out = None
     r2_global = np.nan
@@ -559,7 +559,7 @@ def diff_global(c_xt, x, time,
         "cs_global": cs_global,
         "se_d": se_d,
         "d_global": d_global,
-        "se_cs_per_t": se_cs_per_t,
+        "se_cs": se_cs,
         "r2_per_t": r2_per_t,
         "r2_global": r2_global,
         "pcov": pcov_out,
