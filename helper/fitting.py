@@ -59,6 +59,8 @@ class FitResults:
     config:         FitConfig
     valid_indices:  Optional[np.ndarray] = None
     valid_times:    Optional[np.ndarray] = None
+    n_obs_total:    Optional[int] = None
+    n_params_total: Optional[int] = None
 
     # Core fitted values
     d_per_t:        Optional[np.ndarray] = None # per-timepoint D
@@ -78,6 +80,8 @@ class FitResults:
     r2_per_t:       Optional[np.ndarray] = None
     rmse_per_t:     Optional[np.ndarray] = None
     r2_global:      Optional[float] = None
+    aic:            Optional[float] = None
+    bic:            Optional[float] = None
 
     # Uncertainty
     lb_all:         Optional[np.ndarray] = None
@@ -392,6 +396,9 @@ def _compute_diagnostics(result, popt, layout, x_segments, c_segments,
         if layout[name]["mode"] != "fixed"
     )
 
+    ss_res_total = 0.0
+    n_obs_total = 0
+
     for seg_idx, idx in enumerate(valid_indices):
         x0_val = _get_param_value("x0", popt, layout, seg_idx)
         d_val = _get_param_value("D", popt, layout, seg_idx)
@@ -407,7 +414,25 @@ def _compute_diagnostics(result, popt, layout, x_segments, c_segments,
         
         r2_per_t[idx] = 1 - (ss_res / ss_tot)
         rmse_per_t[idx] = np.sqrt(ss_res / max(1, len(c_seg) - n_free))
+
+        ss_res_total += ss_res
+        n_obs_total += len(c_seg)
     
     result.r2_per_t     = r2_per_t
     result.rmse_per_t   = rmse_per_t
     result.r2_global    = float(np.nanmean(r2_per_t[valid_indices]))
+
+    # --- AIC/BIC using total residuals across all segments ---
+    k = len(popt)
+    n = n_obs_total
+
+    if n > 0 and ss_res_total > 0:
+        result.aic = n * np.log(ss_res_total / n) + 2 * k
+        result.bic = n * np.log(ss_res_total / n) + k * np.log(n)
+
+    else:
+        result.aic = np.nan
+        result.bic = np.nan
+
+    result.n_obs_total = n
+    result.n_params_total = k
