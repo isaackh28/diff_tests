@@ -102,6 +102,7 @@ def fit_diffusion(c_xt, x, t, config: FitConfig) -> FitResults:
     """
     # --- Fit model ---
     model_fn = MODEL_REGISTRY[config.model]
+    print(f"Using model: {config.model} --> {model_fn.__name__}")
 
     # --- Collect valid profiles ---
     x_segments, c_segments, valid_times, valid_indices = _collect_segments(
