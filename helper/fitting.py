@@ -31,6 +31,7 @@ class FitConfig:
     """Configuration for diffusion fitting"""
     model:          str = "semi-infinite"           # semi-infinite OR infinite
     fit_x0:         bool = False                    # allow boundary to shift or no
+    x0_bounds:      Optional[tuple] = None # px size = 0.166 mm, allow x0 to shift up or down 5 px
     d_mode:         str = "per-timepoint"           # per-timepoint OR global
     cs_mode:        str = "per-timepoint"           # per-timepoint OR global OR fixed
     cs_fixed:       Optional[float] = None          # Cs value to be fixed
@@ -51,6 +52,13 @@ class FitConfig:
         
         if self.cs_mode == "fixed" and self.cs_fixed is None:
             raise ValueError("cs_fixed must be provided when cs_mode = 'fixed'")
+        
+        if self.fit_x0 and self.x0_bounds is None:
+            px = 0.166 # pixel size, maybe link back to DICOMs in the future
+            self.x0_bounds = (-px * 3, px * 3)
+
+        if self.x0_bounds is not None and self.x0_bounds[0] >= self.x0_bounds[1]:
+            raise ValueError("x0_bounds must be (lower, upper) with lower < upper")
 
 @dataclass
 class FitResults:
@@ -232,8 +240,8 @@ def _build_params(param_specs, x_segments, c_segments, config):
             # one shared free parameter
             idx = len(p0)
             p0.append(_initial_guess(param_name, config, x_segments, c_segments))
-            lower.append(_lower_bound(param_name))
-            upper.append(_upper_bound(param_name))
+            lower.append(_lower_bound(param_name, config))
+            upper.append(_upper_bound(param_name, config))
             layout[param_name] = {"mode": "global", "index": idx}
         
         elif mode == "per-timepoint":
@@ -243,8 +251,8 @@ def _build_params(param_specs, x_segments, c_segments, config):
                 idx = len(p0)
 
                 p0.append(_initial_guess(param_name, config, x_segments, c_segments, seg_idx = i))
-                lower.append(_lower_bound(param_name))
-                upper.append(_upper_bound(param_name))
+                lower.append(_lower_bound(param_name, config))
+                upper.append(_upper_bound(param_name, config))
                 indices.append(idx)
 
             layout[param_name] = {"mode": "per-timepoint", "indices": indices}
@@ -285,11 +293,17 @@ def _initial_guess(param_name, config, x_segments, c_segments, seg_idx = None):
     
     raise ValueError(f"No initial guess logic for {param_name}")
 
-def _lower_bound(param_name):
-    return 0 # given all params are non-negative
+def _lower_bound(param_name, config):
+    if param_name == "x0" and config.fit_x0:
+        return config.x0_bounds[0]
+    else:
+        return 0 # given all params are non-negative
 
-def _upper_bound(param_name):
-    return np.inf
+def _upper_bound(param_name, config):
+    if param_name == "x0" and config.fit_x0:
+        return config.x0_bounds[1]
+    else:
+        return np.inf
 
 def _unpack_results(result, popt, pcov, layout,
                     x_segments, c_segments, valid_times,
