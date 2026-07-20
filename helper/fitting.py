@@ -18,6 +18,8 @@ VALID_D_MODES = {"global", "per-timepoint"}
 
 VALID_CS_MODES = {"global", "per-timepoint", "fixed"}
 
+VALID_X0_MODES = {"global", "per-timepoint"}
+
 MODEL_REGISTRY = {
     "semi-infinite" : semi_infinite,
     "infinite"      : infinite
@@ -31,6 +33,7 @@ class FitConfig:
     """Configuration for diffusion fitting"""
     model:          str = "semi-infinite"           # semi-infinite OR infinite
     fit_x0:         bool = False                    # allow boundary to shift or no
+    x0_mode:        str = "global"                  # global OR per-timepoint (only used if fit_x0 = True)
     x0_bounds:      Optional[tuple] = None # px size = 0.166 mm, allow x0 to shift up or down 5 px
     d_mode:         str = "per-timepoint"           # per-timepoint OR global
     cs_mode:        str = "per-timepoint"           # per-timepoint OR global OR fixed
@@ -53,6 +56,9 @@ class FitConfig:
         if self.cs_mode == "fixed" and self.cs_fixed is None:
             raise ValueError("cs_fixed must be provided when cs_mode = 'fixed'")
         
+        if self.fit_x0 and self.x0_mode not in VALID_X0_MODES:
+            raise ValueError(f"x0_mode must be one of {VALID_X0_MODES}")
+
         if self.fit_x0 and self.x0_bounds is None:
             px = 0.166 # pixel size, maybe link back to DICOMs in the future
             self.x0_bounds = (-px * 3, px * 3)
@@ -83,6 +89,8 @@ class FitResults:
 
     x0_per_t:       Optional[np.ndarray] = None
     se_x0_per_t:    Optional[np.ndarray] = None
+    x0_global:      Optional[float]      = None
+    se_x0_global:   Optional[float]      = None
 
     # Fit diagnostics
     r2_per_t:       Optional[np.ndarray] = None
@@ -110,7 +118,6 @@ def fit_diffusion(c_xt, x, t, config: FitConfig) -> FitResults:
     """
     # --- Fit model ---
     model_fn = MODEL_REGISTRY[config.model]
-    print(f"Using model: {config.model} --> {model_fn.__name__}")
 
     # --- Collect valid profiles ---
     x_segments, c_segments, valid_times, valid_indices = _collect_segments(
@@ -119,7 +126,7 @@ def fit_diffusion(c_xt, x, t, config: FitConfig) -> FitResults:
 
     # --- Build parameter structure ---
     param_specs = {
-        "x0":   "per-timepoint" if config.fit_x0 else "fixed",
+        "x0":   config.x0_mode if config.fit_x0 else "fixed",
         "D":    config.d_mode,
         "Cs":   config.cs_mode
     }
@@ -384,6 +391,10 @@ def _unpack_parameters(result, popt, stdevs, layout, valid_indices):
         
         result.x0_per_t     = x0_per_t
         result.se_x0_per_t  = se_x0_per_t
+    
+    elif x0_spec["mode"] == "global":
+        result.x0_global    = popt[x0_spec["index"]]
+        result.se_x0_global = stdevs[x0_spec["index"]]
 
 def _compute_uncertainty(result, popt, stdevs, pcov, n_obs, n_params, alpha = 0.05):
     """Computes CI bounds and corrrelation matrix"""
@@ -402,14 +413,22 @@ def _compute_diagnostics(result, popt, layout, x_segments, c_segments,
                          valid_times, valid_indices, model_fn):
     """Computes per-segment R2 and RMSE"""
     T = max(valid_indices) + 1
+    n_t = len(valid_indices)
 
     r2_per_t = np.full(T, np.nan)
     rmse_per_t = np.full(T, np.nan)
 
-    n_free = sum(
+    n_free_global = sum(
         1 for name in ("x0", "D", "Cs")
-        if layout[name]["mode"] != "fixed"
+        if layout[name]["mode"] == "global"
     )
+
+    n_free_per_t = sum(
+        1 for name in ("x0", "D", "Cs")
+        if layout[name]["mode"] == "per-timepoint"
+    )
+
+    n_free_per_segment = n_free_per_t + n_free_global / max(1, n_t)
 
     ss_res_total = 0.0
     n_obs_total = 0
@@ -428,7 +447,7 @@ def _compute_diagnostics(result, popt, layout, x_segments, c_segments,
         ss_tot = np.sum((c_seg - np.mean(c_seg)) ** 2)
         
         r2_per_t[idx] = 1 - (ss_res / ss_tot)
-        rmse_per_t[idx] = np.sqrt(ss_res / max(1, len(c_seg) - n_free))
+        rmse_per_t[idx] = np.sqrt(ss_res / max(1, len(c_seg) - n_free_per_segment))
 
         ss_res_total += ss_res
         n_obs_total += len(c_seg)
