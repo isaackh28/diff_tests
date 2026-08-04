@@ -94,8 +94,9 @@ class FitResults:
 
     # Fit diagnostics
     r2_per_t:       Optional[np.ndarray] = None
-    rmse_per_t:     Optional[np.ndarray] = None
+    rse_per_t:      Optional[np.ndarray] = None
     r2_global:      Optional[float] = None
+    rse_global:     Optional[float] = None
     aic:            Optional[float] = None
     bic:            Optional[float] = None
 
@@ -416,7 +417,7 @@ def _compute_diagnostics(result, popt, layout, x_segments, c_segments,
     n_t = len(valid_indices)
 
     r2_per_t = np.full(T, np.nan)
-    rmse_per_t = np.full(T, np.nan)
+    rse_per_t = np.full(T, np.nan)
 
     n_free_global = sum(
         1 for name in ("x0", "D", "Cs")
@@ -431,6 +432,7 @@ def _compute_diagnostics(result, popt, layout, x_segments, c_segments,
     n_free_per_segment = n_free_per_t + n_free_global / max(1, n_t)
 
     ss_res_total = 0.0
+    ss_tot_total = 0.0
     n_obs_total = 0
 
     for seg_idx, idx in enumerate(valid_indices):
@@ -447,14 +449,18 @@ def _compute_diagnostics(result, popt, layout, x_segments, c_segments,
         ss_tot = np.sum((c_seg - np.mean(c_seg)) ** 2)
         
         r2_per_t[idx] = 1 - (ss_res / ss_tot)
-        rmse_per_t[idx] = np.sqrt(ss_res / max(1, len(c_seg) - n_free_per_segment))
+        rse_per_t[idx] = np.sqrt(ss_res / max(1, len(c_seg) - n_free_per_segment))
 
         ss_res_total += ss_res
+        ss_tot_total += ss_tot
         n_obs_total += len(c_seg)
     
     result.r2_per_t     = r2_per_t
-    result.rmse_per_t   = rmse_per_t
-    result.r2_global    = float(np.nanmean(r2_per_t[valid_indices]))
+    result.rse_per_t    = rse_per_t
+
+    # Compute global r2/rse
+    result.r2_global    = 1 - ss_res_total / ss_tot_total
+    result.rse_global   = np.sqrt(ss_res_total / (n_obs_total - len(popt)))
 
     # --- AIC/BIC using total residuals across all segments ---
     k = len(popt)
