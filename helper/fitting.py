@@ -297,7 +297,7 @@ def _initial_guess(param_name, config, x_segments, c_segments, seg_idx = None):
         return seg[0]
     if param_name == "Cs":
         seg = c_segments[seg_idx] if seg_idx is not None else c_segments[0]
-        return np.nanmax(seg)
+        return np.nanmax(seg) / 2
     
     raise ValueError(f"No initial guess logic for {param_name}")
 
